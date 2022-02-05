@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -o xtrace
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+DOCKER_DIR="${SCRIPT_DIR}/../spree/spree_starter"
+
+cd $DOCKER_DIR
+
+docker-compose down
+
+FROM=${1:-spree_postgres_prepared}
+# FROM=${1:-spree_postgres_payment}
+TO=${2:-spree_starter_postgres}
+
+echo "Copy from $FROM to $TO"
+
+# Remove & create volume
+docker volume rm $TO
+docker volume create $TO
+
+# Create from fresh volume
+docker run --rm \
+	-v $FROM:/from \
+	-v $TO:/to \
+	ubuntu bash -c 'cd /from ; cp -a . /to'
+
+docker-compose up -d
+
+until curl --silent -o /dev/null http://127.0.0.1:4000/admin; do
+ echo 'Waiting for Rails...'
+ sleep 1
+done
+echo "Rails is up and running!"

@@ -1,0 +1,40 @@
+diff --git a/plugin.rb b/plugin.rb
+index 522897c..f48c8df 100644
+--- a/plugin.rb
++++ b/plugin.rb
+@@ -78,7 +78,7 @@ SQL
+     def self.accept_answer!(post, acting_user, topic: nil)
+       topic ||= post.topic
+ 
+-      DistributedMutex.synchronize("discourse_solved_toggle_answer_#{topic.id}") do
++      Post.transaction(isolation: :repeatable_read) do
+         accepted_id = topic.custom_fields["accepted_answer_post_id"].to_i
+ 
+         if accepted_id > 0
+@@ -167,7 +167,7 @@ SQL
+     def self.unaccept_answer!(post, topic: nil)
+       topic ||= post.topic
+ 
+-      DistributedMutex.synchronize("discourse_solved_toggle_answer_#{topic.id}") do
++      Post.transaction(isolation: :repeatable_read) do
+         post.custom_fields["is_accepted_answer"] = nil
+         topic.custom_fields["accepted_answer_post_id"] = nil
+ 
+@@ -213,7 +213,7 @@ SQL
+   class DiscourseSolved::AnswerController < ::ApplicationController
+ 
+     def accept
+-      limit_accepts
++      # limit_accepts
+ 
+       post = Post.find(params[:id].to_i)
+ 
+@@ -228,7 +228,7 @@ SQL
+     end
+ 
+     def unaccept
+-      limit_accepts
++      # limit_accepts
+ 
+       post = Post.find(params[:id].to_i)
+ 

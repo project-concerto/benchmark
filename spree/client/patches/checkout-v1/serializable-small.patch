@@ -1,0 +1,17 @@
+diff --git a/api/app/controllers/spree/api/v1/checkouts_controller.rb b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+index 437f1396a1..f849794549 100644
+--- a/api/app/controllers/spree/api/v1/checkouts_controller.rb
++++ b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+@@ -21,7 +21,11 @@ module Spree
+         def update
+           authorize! :update, @order, order_token
+ 
+-          if @order.update_from_params(params, permitted_checkout_attributes, request.headers.env)
++          res = ApplicationRecord.transaction(isolation: :serializable) do
++            @order.update_from_params(params, permitted_checkout_attributes, request.headers.env)
++          end
++
++          if res
+             if current_api_user.has_spree_role?('admin') && user_id.present?
+               @order.associate_user!(Spree.user_class.find(user_id))
+             end

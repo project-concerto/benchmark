@@ -1,0 +1,45 @@
+diff --git a/api/app/controllers/spree/api/v1/checkouts_controller.rb b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+index 437f1396a1..f849794549 100644
+--- a/api/app/controllers/spree/api/v1/checkouts_controller.rb
++++ b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+@@ -21,7 +21,11 @@ module Spree
+         def update
+           authorize! :update, @order, order_token
+ 
+-          if @order.update_from_params(params, permitted_checkout_attributes, request.headers.env)
++          res = ApplicationRecord.transaction(isolation: :serializable) do
++            @order.update_from_params(params, permitted_checkout_attributes, request.headers.env)
++          end
++
++          if res
+             if current_api_user.has_spree_role?('admin') && user_id.present?
+               @order.associate_user!(Spree.user_class.find(user_id))
+             end
+diff --git a/core/app/models/spree/order/checkout.rb b/core/app/models/spree/order/checkout.rb
+index 7f5f4cfe9f..2df7c8b2f8 100644
+--- a/core/app/models/spree/order/checkout.rb
++++ b/core/app/models/spree/order/checkout.rb
+@@ -247,7 +247,7 @@ module Spree
+               end
+ 
+               success = update(attributes)
+-              set_shipments_cost if shipments.any?
++              # set_shipments_cost if shipments.any?
+             end
+ 
+             @updating_params = nil
+diff --git a/core/app/models/spree/product.rb b/core/app/models/spree/product.rb
+index 0d97d9d924..77986d18e5 100644
+--- a/core/app/models/spree/product.rb
++++ b/core/app/models/spree/product.rb
+@@ -468,8 +468,8 @@ module Spree
+ 
+     # Iterate through this products taxons and taxonomies and touch their timestamps in a batch
+     def touch_taxons
+-      Spree::Taxon.where(id: taxon_and_ancestors.map(&:id)).update_all(updated_at: Time.current)
+-      Spree::Taxonomy.where(id: taxonomy_ids).update_all(updated_at: Time.current)
++      # Spree::Taxon.where(id: taxon_and_ancestors.map(&:id)).update_all(updated_at: Time.current)
++      # Spree::Taxonomy.where(id: taxonomy_ids).update_all(updated_at: Time.current)
+     end
+ 
+     def ensure_no_line_items

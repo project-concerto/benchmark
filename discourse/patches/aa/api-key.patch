@@ -1,0 +1,17 @@
+diff --git a/lib/auth/default_current_user_provider.rb b/lib/auth/default_current_user_provider.rb
+index 4f369d92..438110f4 100644
+--- a/lib/auth/default_current_user_provider.rb
++++ b/lib/auth/default_current_user_provider.rb
+@@ -385,9 +385,9 @@ class Auth::DefaultCurrentUserProvider
+           SingleSignOnRecord.find_by(external_id: external_id.to_s).try(:user)
+         end
+ 
+-      if user && can_write?
+-        api_key.update_columns(last_used_at: Time.zone.now)
+-      end
++      #if user && can_write?
++      #  api_key.update_columns(last_used_at: Time.zone.now)
++      #end
+ 
+       user
+     end

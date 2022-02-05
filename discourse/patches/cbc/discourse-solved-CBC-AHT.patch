@@ -1,0 +1,256 @@
+diff --git a/plugin.rb b/plugin.rb
+index 522897c..5baf8e5 100644
+--- a/plugin.rb
++++ b/plugin.rb
+@@ -79,88 +79,90 @@ SQL
+       topic ||= post.topic
+ 
+       DistributedMutex.synchronize("discourse_solved_toggle_answer_#{topic.id}") do
+-        accepted_id = topic.custom_fields["accepted_answer_post_id"].to_i
+-
+-        if accepted_id > 0
+-          if p2 = Post.find_by(id: accepted_id)
+-            p2.custom_fields["is_accepted_answer"] = nil
+-            p2.save!
+-
+-            if defined?(UserAction::SOLVED)
+-              UserAction.where(
+-                action_type: UserAction::SOLVED,
+-                target_post_id: p2.id
+-              ).destroy_all
++        Post.transaction do
++          accepted_id = topic.custom_fields["accepted_answer_post_id"].to_i
++
++          if accepted_id > 0
++            if p2 = Post.find_by(id: accepted_id)
++              p2.custom_fields["is_accepted_answer"] = nil
++              p2.save!
++
++              if defined?(UserAction::SOLVED)
++                UserAction.where(
++                  action_type: UserAction::SOLVED,
++                  target_post_id: p2.id
++                ).destroy_all
++              end
+             end
+           end
+-        end
+ 
+-        post.custom_fields["is_accepted_answer"] = "true"
+-        topic.custom_fields["accepted_answer_post_id"] = post.id
++          post.custom_fields["is_accepted_answer"] = "true"
++          topic.custom_fields["accepted_answer_post_id"] = post.id
++
++          if defined?(UserAction::SOLVED)
++            UserAction.log_action!(
++              action_type: UserAction::SOLVED,
++              user_id: post.user_id,
++              acting_user_id: acting_user.id,
++              target_post_id: post.id,
++              target_topic_id: post.topic_id
++            )
++          end
+ 
+-        if defined?(UserAction::SOLVED)
+-          UserAction.log_action!(
+-            action_type: UserAction::SOLVED,
+-            user_id: post.user_id,
+-            acting_user_id: acting_user.id,
+-            target_post_id: post.id,
+-            target_topic_id: post.topic_id
+-          )
+-        end
++          notification_data = {
++            message: 'solved.accepted_notification',
++            display_username: acting_user.username,
++            topic_title: topic.title
++          }.to_json
++
++          unless acting_user.id == post.user_id
++            Notification.create!(
++              notification_type: Notification.types[:custom],
++              user_id: post.user_id,
++              topic_id: post.topic_id,
++              post_number: post.post_number,
++              data: notification_data
++            )
++          end
+ 
+-        notification_data = {
+-          message: 'solved.accepted_notification',
+-          display_username: acting_user.username,
+-          topic_title: topic.title
+-        }.to_json
++          if SiteSetting.notify_on_staff_accept_solved && acting_user.id != topic.user_id
++            Notification.create!(
++              notification_type: Notification.types[:custom],
++              user_id: topic.user_id,
++              topic_id: post.topic_id,
++              post_number: post.post_number,
++              data: notification_data
++            )
++          end
+ 
+-        unless acting_user.id == post.user_id
+-          Notification.create!(
+-            notification_type: Notification.types[:custom],
+-            user_id: post.user_id,
+-            topic_id: post.topic_id,
+-            post_number: post.post_number,
+-            data: notification_data
+-          )
+-        end
++          auto_close_hours = SiteSetting.solved_topics_auto_close_hours
+ 
+-        if SiteSetting.notify_on_staff_accept_solved && acting_user.id != topic.user_id
+-          Notification.create!(
+-            notification_type: Notification.types[:custom],
+-            user_id: topic.user_id,
+-            topic_id: post.topic_id,
+-            post_number: post.post_number,
+-            data: notification_data
+-          )
+-        end
++          if (auto_close_hours > 0) && !topic.closed
++            topic_timer = topic.set_or_create_timer(
++              # Fallback to TopicTimer.types[:close] can be removed after discourse stable version > 2.7
++              TopicTimer.types[:silent_close] || TopicTimer.types[:close],
++              nil,
++              based_on_last_post: true,
++              duration: auto_close_hours
++            )
+ 
+-        auto_close_hours = SiteSetting.solved_topics_auto_close_hours
++            topic.custom_fields[
++              AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD
++            ] = topic_timer.id
+ 
+-        if (auto_close_hours > 0) && !topic.closed
+-          topic_timer = topic.set_or_create_timer(
+-            # Fallback to TopicTimer.types[:close] can be removed after discourse stable version > 2.7
+-            TopicTimer.types[:silent_close] || TopicTimer.types[:close],
+-            nil,
+-            based_on_last_post: true,
+-            duration: auto_close_hours
+-          )
+-
+-          topic.custom_fields[
+-            AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD
+-          ] = topic_timer.id
++            MessageBus.publish("/topic/#{topic.id}", reload_topic: true)
++          end
+ 
+-          MessageBus.publish("/topic/#{topic.id}", reload_topic: true)
+-        end
++          topic.save!
++          post.save!
+ 
+-        topic.save!
+-        post.save!
++          if WebHook.active_web_hooks(:solved).exists?
++            payload = WebHook.generate_payload(:post, post)
++            WebHook.enqueue_solved_hooks(:accepted_solution, post, payload)
++          end
+ 
+-        if WebHook.active_web_hooks(:solved).exists?
+-          payload = WebHook.generate_payload(:post, post)
+-          WebHook.enqueue_solved_hooks(:accepted_solution, post, payload)
++          DiscourseEvent.trigger(:accepted_solution, post)
+         end
+-
+-        DiscourseEvent.trigger(:accepted_solution, post)
+       end
+     end
+ 
+@@ -168,42 +170,44 @@ SQL
+       topic ||= post.topic
+ 
+       DistributedMutex.synchronize("discourse_solved_toggle_answer_#{topic.id}") do
+-        post.custom_fields["is_accepted_answer"] = nil
+-        topic.custom_fields["accepted_answer_post_id"] = nil
++        Post.transaction do
++          post.custom_fields["is_accepted_answer"] = nil
++          topic.custom_fields["accepted_answer_post_id"] = nil
++
++          if timer_id = topic.custom_fields[AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD]
++            topic_timer = TopicTimer.find_by(id: timer_id)
++            topic_timer.destroy! if topic_timer
++            topic.custom_fields[AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD] = nil
++          end
+ 
+-        if timer_id = topic.custom_fields[AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD]
+-          topic_timer = TopicTimer.find_by(id: timer_id)
+-          topic_timer.destroy! if topic_timer
+-          topic.custom_fields[AUTO_CLOSE_TOPIC_TIMER_CUSTOM_FIELD] = nil
+-        end
++          topic.save!
++          post.save!
+ 
+-        topic.save!
+-        post.save!
++          # TODO remove_action! does not allow for this type of interface
++          if defined? UserAction::SOLVED
++            UserAction.where(
++              action_type: UserAction::SOLVED,
++              target_post_id: post.id
++            ).destroy_all
++          end
+ 
+-        # TODO remove_action! does not allow for this type of interface
+-        if defined? UserAction::SOLVED
+-          UserAction.where(
+-            action_type: UserAction::SOLVED,
+-            target_post_id: post.id
+-          ).destroy_all
+-        end
++          # yank notification
++          notification = Notification.find_by(
++            notification_type: Notification.types[:custom],
++            user_id: post.user_id,
++            topic_id: post.topic_id,
++            post_number: post.post_number
++          )
+ 
+-        # yank notification
+-        notification = Notification.find_by(
+-          notification_type: Notification.types[:custom],
+-          user_id: post.user_id,
+-          topic_id: post.topic_id,
+-          post_number: post.post_number
+-        )
++          notification.destroy! if notification
+ 
+-        notification.destroy! if notification
++          if WebHook.active_web_hooks(:solved).exists?
++            payload = WebHook.generate_payload(:post, post)
++            WebHook.enqueue_solved_hooks(:unaccepted_solution, post, payload)
++          end
+ 
+-        if WebHook.active_web_hooks(:solved).exists?
+-          payload = WebHook.generate_payload(:post, post)
+-          WebHook.enqueue_solved_hooks(:unaccepted_solution, post, payload)
++          DiscourseEvent.trigger(:unaccepted_solution, post)     
+         end
+-
+-        DiscourseEvent.trigger(:unaccepted_solution, post)
+       end
+     end
+   end
+@@ -213,7 +217,7 @@ SQL
+   class DiscourseSolved::AnswerController < ::ApplicationController
+ 
+     def accept
+-      limit_accepts
++      # limit_accepts
+ 
+       post = Post.find(params[:id].to_i)
+ 
+@@ -228,7 +232,7 @@ SQL
+     end
+ 
+     def unaccept
+-      limit_accepts
++      # limit_accepts
+ 
+       post = Post.find(params[:id].to_i)
+ 

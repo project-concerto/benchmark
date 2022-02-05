@@ -1,0 +1,196 @@
+diff --git a/common/src/main/java/org/broadleafcommerce/common/security/service/ExploitProtectionServiceImpl.java b/common/src/main/java/org/broadleafcommerce/common/security/service/ExploitProtectionServiceImpl.java
+index 1863ad1b8d..5a1eebba02 100644
+--- a/common/src/main/java/org/broadleafcommerce/common/security/service/ExploitProtectionServiceImpl.java
++++ b/common/src/main/java/org/broadleafcommerce/common/security/service/ExploitProtectionServiceImpl.java
+@@ -81,7 +81,7 @@ public class ExploitProtectionServiceImpl implements ExploitProtectionService {
+     //this is thread safe for the usage of scan()
+     private final AntiSamy as = new AntiSamy();
+ 
+-    @Value("${exploitProtection.xsrfEnabled:true}")
++    @Value("${exploitProtection.xsrfEnabled:false}")
+     protected boolean xsrfProtectionEnabled;
+     
+     @Value("${exploitProtection.xssEnabled:true}")
+@@ -142,13 +142,13 @@ public class ExploitProtectionServiceImpl implements ExploitProtectionService {
+ 
+     @Override
+     public void compareToken(String passedToken) throws ServiceException {
+-        if (xsrfProtectionEnabled) {
+-            if (!getCSRFToken().equals(passedToken)) {
+-                throw new ServiceException("XSRF token mismatch (" + passedToken + "). Session may be expired.");
+-            } else {
+-                LOG.debug("Validated CSRF token");
+-            }
+-        }
++        // if (xsrfProtectionEnabled) {
++        //     if (!getCSRFToken().equals(passedToken)) {
++        //         throw new ServiceException("XSRF token mismatch (" + passedToken + "). Session may be expired.");
++        //     } else {
++        //         LOG.debug("Validated CSRF token");
++        //     }
++        // }
+     }
+ 
+     @Override
+diff --git a/common/src/main/java/org/broadleafcommerce/common/security/service/StaleStateProtectionServiceImpl.java b/common/src/main/java/org/broadleafcommerce/common/security/service/StaleStateProtectionServiceImpl.java
+index 0083af8ed6..ce8cdc2dea 100644
+--- a/common/src/main/java/org/broadleafcommerce/common/security/service/StaleStateProtectionServiceImpl.java
++++ b/common/src/main/java/org/broadleafcommerce/common/security/service/StaleStateProtectionServiceImpl.java
+@@ -56,17 +56,17 @@ public class StaleStateProtectionServiceImpl implements StaleStateProtectionServ
+ 
+     @Override
+     public void compareToken(String passedToken) {
+-        if (staleStateProtectionEnabled) {
+-            HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+-            if (!getStateVersionToken().equals(passedToken) && request.getAttribute(getStateVersionTokenParameter()) == null) {
+-                throw new StaleStateServiceException("Page version token mismatch (" + passedToken + "). The request likely came from a stale page.");
+-            } else {
+-                request.setAttribute(getStateVersionTokenParameter(), "passed");
+-                if (LOG.isDebugEnabled()) {
+-                    LOG.debug("Validated page version token");
+-                }
+-            }
+-        }
++        // if (staleStateProtectionEnabled) {
++        //     HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
++        //     if (!getStateVersionToken().equals(passedToken) && request.getAttribute(getStateVersionTokenParameter()) == null) {
++        //         throw new StaleStateServiceException("Page version token mismatch (" + passedToken + "). The request likely came from a stale page.");
++        //     } else {
++        //         request.setAttribute(getStateVersionTokenParameter(), "passed");
++        //         if (LOG.isDebugEnabled()) {
++        //             LOG.debug("Validated page version token");
++        //         }
++        //     }
++        // }
+     }
+ 
+     @Override
+diff --git a/core/broadleaf-framework-web/src/main/java/org/broadleafcommerce/core/web/order/security/CartStateFilter.java b/core/broadleaf-framework-web/src/main/java/org/broadleafcommerce/core/web/order/security/CartStateFilter.java
+index 0405c01104..a7d1a5b48b 100644
+--- a/core/broadleaf-framework-web/src/main/java/org/broadleafcommerce/core/web/order/security/CartStateFilter.java
++++ b/core/broadleaf-framework-web/src/main/java/org/broadleafcommerce/core/web/order/security/CartStateFilter.java
+@@ -21,6 +21,7 @@ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.broadleafcommerce.common.admin.condition.ConditionalOnNotAdmin;
+ import org.broadleafcommerce.common.util.BLCSystemProperty;
++import org.broadleafcommerce.common.util.TransactionUtils;
+ import org.broadleafcommerce.common.web.filter.AbstractIgnorableOncePerRequestFilter;
+ import org.broadleafcommerce.common.web.filter.FilterOrdered;
+ import org.broadleafcommerce.core.order.domain.Order;
+@@ -31,28 +32,34 @@ import org.broadleafcommerce.core.web.order.security.exception.OrderLockAcquisit
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.beans.factory.annotation.Qualifier;
+ import org.springframework.core.Ordered;
++import org.springframework.orm.jpa.JpaTransactionManager;
+ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+ import org.springframework.security.web.util.matcher.RequestMatcher;
+ import org.springframework.stereotype.Component;
++import org.springframework.transaction.TransactionDefinition;
++import org.springframework.transaction.TransactionStatus;
+ import org.springframework.web.context.request.ServletWebRequest;
+ import org.springframework.web.filter.OncePerRequestFilter;
+ 
+ import java.io.IOException;
+ import java.util.List;
+ 
++import javax.annotation.Resource;
+ import javax.servlet.FilterChain;
+ import javax.servlet.ServletException;
+ import javax.servlet.ServletRequest;
+ import javax.servlet.http.HttpServletRequest;
+ import javax.servlet.http.HttpServletResponse;
+ 
++import static org.broadleafcommerce.common.util.TransactionUtils.createTransaction;
++
+ /**
+  * <p>
+  * This filter should be configured after the BroadleafCommerce CustomerStateFilter listener from Spring Security.
+  * Retrieves the cart for the current BroadleafCommerce Customer based using the authenticated user OR creates an empty non-modifiable cart and
+  * stores it in the request.
+  * </p>
+- * 
++ *
+  * <p>
+  * This filter is also responsible for establishing a session-wide lock for operations that require a lock, indicated
+  * by {@link #requestRequiresLock(ServletRequest)}. By default, this is configured for all POST requests. Requests that
+@@ -75,18 +82,29 @@ public class CartStateFilter extends AbstractIgnorableOncePerRequestFilter {
+     @Autowired
+     @Qualifier("blOrderLockManager")
+     protected OrderLockManager orderLockManager;
+-    
++
+     @Autowired
+     @Qualifier("blOrderService")
+     protected OrderService orderService;
+ 
+     protected List<String> excludedOrderLockRequestPatterns;
+ 
++    @Resource(name = "blTransactionManager")
++    protected JpaTransactionManager transactionManager;
++
+     @Override
+     public void doFilterInternalUnlessIgnored(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+-            throws IOException, ServletException {        
++            throws IOException, ServletException {
+         cartStateProcessor.process(new ServletWebRequest(request, response));
+-        
++        TransactionStatus status = null;
++        if(request.getRequestURI().equals("/checkout/complete")){
++            status = createTransaction("checkout",  TransactionDefinition.PROPAGATION_REQUIRED,
++                    TransactionDefinition.ISOLATION_SERIALIZABLE, transactionManager, false);
++            chain.doFilter(request, response);
++            TransactionUtils.finalizeTransaction(status, transactionManager, false);
++            return;
++        }
++
+         if (!requestRequiresLock(request)) {
+             chain.doFilter(request, response);
+             return;
+@@ -113,7 +131,7 @@ public class CartStateFilter extends AbstractIgnorableOncePerRequestFilter {
+                     lockObject = orderLockManager.acquireLock(order);
+                 }
+             }
+-    
++
+             if (LOG.isTraceEnabled()) {
+                 LOG.trace("Thread[" + Thread.currentThread().getId() + "] grabbed lock for order[" + order.getId() + "]");
+             }
+@@ -139,7 +157,7 @@ public class CartStateFilter extends AbstractIgnorableOncePerRequestFilter {
+     /**
+      * By default, all POST requests that are not matched by the {@link #getExcludedOrderLockRequestPatterns()} list
+      * (using the {@link AntPathRequestMatcher}) will be marked as requiring a lock on the Order.
+-     * 
++     *
+      * @param req
+      * @return whether or not the current request requires a lock on the order
+      */
+@@ -147,7 +165,7 @@ public class CartStateFilter extends AbstractIgnorableOncePerRequestFilter {
+         if (!(req instanceof HttpServletRequest)) {
+                return false;
+         }
+-        
++
+         if (!orderLockManager.isActive()) {
+             return false;
+         }
+@@ -157,7 +175,7 @@ public class CartStateFilter extends AbstractIgnorableOncePerRequestFilter {
+         if (!request.getMethod().equalsIgnoreCase("post")) {
+             return false;
+         }
+-        
++
+         if (excludedOrderLockRequestPatterns != null && excludedOrderLockRequestPatterns.size() > 0) {
+             for (String pattern : excludedOrderLockRequestPatterns) {
+                 RequestMatcher matcher = new AntPathRequestMatcher(pattern);
+diff --git a/core/broadleaf-framework-web/src/main/resources/bl-framework-web-applicationContext.xml b/core/broadleaf-framework-web/src/main/resources/bl-framework-web-applicationContext.xml
+index 2c1a894952..7810a37d7f 100644
+--- a/core/broadleaf-framework-web/src/main/resources/bl-framework-web-applicationContext.xml
++++ b/core/broadleaf-framework-web/src/main/resources/bl-framework-web-applicationContext.xml
+@@ -61,6 +61,6 @@
+         </aop:aspect>
+     </aop:config>
+ 
+-    <bean id="blOrderLockManager" class="org.broadleafcommerce.core.web.order.DatabaseOrderLockManager"/>
++    <bean id="blOrderLockManager" class="org.broadleafcommerce.core.web.order.SessionOrderLockManager"/>
+ 
+ </beans>

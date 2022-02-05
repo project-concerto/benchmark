@@ -1,0 +1,245 @@
+diff --git a/admin/pom.xml b/admin/pom.xml
+index 43ed210..e21b8ea 100644
+--- a/admin/pom.xml
++++ b/admin/pom.xml
+@@ -55,7 +55,11 @@
+         </dependency>
+         <dependency>
+             <groupId>com.broadleafcommerce</groupId>
+-            <artifactId>broadleaf-boot-starter-hsql-database</artifactId>
++            <artifactId>broadleaf-boot-starter-database</artifactId>
++        </dependency>
++        <dependency>
++            <groupId>mysql</groupId>
++            <artifactId>mysql-connector-java</artifactId>
+         </dependency>
+         <dependency>
+             <groupId>org.broadleafcommerce</groupId>
+diff --git a/admin/src/main/resources/runtime-properties/default.properties b/admin/src/main/resources/runtime-properties/default.properties
+index e2e19db..b53111d 100644
+--- a/admin/src/main/resources/runtime-properties/default.properties
++++ b/admin/src/main/resources/runtime-properties/default.properties
+@@ -7,8 +7,8 @@
+ # Please see common-shared.properties for more information on how the properties files work
+ 
+ exception.showDebugMessage=true
+-blPU.hibernate.hbm2ddl.auto=create
+-blEventPU.hibernate.hbm2ddl.auto=create
++blPU.hibernate.hbm2ddl.auto=update
++blEventPU.hibernate.hbm2ddl.auto=update
+ 
+ jmx.app.name=admin
+ http.server.port=8081
+diff --git a/api/pom.xml b/api/pom.xml
+index 0dec680..b5879ba 100644
+--- a/api/pom.xml
++++ b/api/pom.xml
+@@ -50,7 +50,11 @@
+         </dependency>
+         <dependency>
+             <groupId>com.broadleafcommerce</groupId>
+-            <artifactId>broadleaf-boot-starter-hsql-database</artifactId>
++            <artifactId>broadleaf-boot-starter-database</artifactId>
++        </dependency>
++        <dependency>
++            <groupId>mysql</groupId>
++            <artifactId>mysql-connector-java</artifactId>
+         </dependency>
+         <dependency>
+             <groupId>com.broadleafcommerce</groupId>
+diff --git a/api/src/main/resources/runtime-properties/default.properties b/api/src/main/resources/runtime-properties/default.properties
+index 52f54b9..3a33352 100644
+--- a/api/src/main/resources/runtime-properties/default.properties
++++ b/api/src/main/resources/runtime-properties/default.properties
+@@ -6,8 +6,8 @@
+ 
+ # Please see common-shared.properties for more information on how the properties files work
+ 
+-blPU.hibernate.hbm2ddl.auto=create
+-blEventPU.hibernate.hbm2ddl.auto=create
++blPU.hibernate.hbm2ddl.auto=update
++blEventPU.hibernate.hbm2ddl.auto=update
+ 
+ jmx.app.name=api
+ http.server.port=8082
+diff --git a/core/src/main/resources/runtime-properties/common-shared.properties b/core/src/main/resources/runtime-properties/common-shared.properties
+index 294458e..a82cea6 100644
+--- a/core/src/main/resources/runtime-properties/common-shared.properties
++++ b/core/src/main/resources/runtime-properties/common-shared.properties
+@@ -80,40 +80,45 @@ store.front.webapp.prefix=http://localhost:8080/
+ 
+ # Settings for the default persistence unit
+ blPU.hibernate.hbm2ddl.auto=none
+-blPU.hibernate.dialect=org.broadleafcommerce.common.dialect.DemoHSQLDialect
++blPU.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect
+ blPU.hibernate.show_sql=false
+-blPU.hibernate.cache.use_second_level_cache=true
+-blPU.hibernate.cache.use_query_cache=true
++blPU.hibernate.cache.use_second_level_cache=false
++blPU.hibernate.cache.use_query_cache=false
+ blPU.hibernate.hbm2ddl.import_files=null
+ # Settings for the CMS storage persistence unit
+ blCMSStorage.hibernate.hbm2ddl.auto=none
+-blCMSStorage.hibernate.dialect=org.broadleafcommerce.common.dialect.DemoHSQLDialect
++blCMSStorage.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect
+ blCMSStorage.hibernate.show_sql=false
+-blCMSStorage.hibernate.cache.use_second_level_cache=true
+-blCMSStorage.hibernate.cache.use_query_cache=true
++blCMSStorage.hibernate.cache.use_second_level_cache=false
++blCMSStorage.hibernate.cache.use_query_cache=false
+ blCMSStorage.hibernate.hbm2ddl.import_files=null
+ # Settings for the secure persistence unit
+ blSecurePU.hibernate.hbm2ddl.auto=none
+-blSecurePU.hibernate.dialect=org.broadleafcommerce.common.dialect.DemoHSQLDialect
++blSecurePU.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect
+ blSecurePU.hibernate.show_sql=false
+ blSecurePU.hibernate.cache.use_second_level_cache=false
+ blSecurePU.hibernate.cache.use_query_cache=false
+ blSecurePU.hibernate.hbm2ddl.import_files=null
+ # Settings for the event persistence unit
+ blEventPU.hibernate.hbm2ddl.auto=none
+-blEventPU.hibernate.dialect=org.broadleafcommerce.common.dialect.DemoHSQLDialect
++blEventPU.hibernate.dialect=org.hibernate.dialect.MySQL5InnoDBDialect
+ blEventPU.hibernate.show_sql=false
+ blEventPU.hibernate.cache.use_second_level_cache=false
+ blEventPU.hibernate.cache.use_query_cache=false
+ blEventPU.hibernate.hbm2ddl.import_files=null
+ 
+-blPU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
+-blSecurePU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
+-blCMSStorage.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
+-blEventPU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
++# blPU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
++# blSecurePU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
++# blCMSStorage.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
++# blEventPU.hibernate.hbm2ddl.import_files_sql_extractor=org.broadleafcommerce.common.util.sql.importsql.DemoHsqlSingleLineSqlCommandExtractor
+ 
+ auto.correct.sequence.generator.inconsistencies=true
+ 
++database.user=root
++database.password=123456
++database.driver=com.mysql.jdbc.Driver
++database.url=jdbc:mysql://localhost:3306/broadleaf?useSSL=false&allowPublicKeyRetrieval=true
++
+ # ##################################### #
+ # Thymeleaf View Resolver               #
+ # ##################################### #
+@@ -164,7 +169,7 @@ searchRedirect.is.null.activeStartDate.active=false
+ 
+ exception.handler.enabled=true
+ 
+-logging.config=classpath:logging/logback.xml
++# logging.config=classpath:logging/logback.xml
+ 
+ # Disables Spring's out-of-box Whitelabel Error Page that is configured by ErrorMvcAutoConfiguration
+ # in favor of allowing our Thymeleaf view resolvers to handle errors.
+diff --git a/core/src/main/resources/runtime-properties/default-shared.properties b/core/src/main/resources/runtime-properties/default-shared.properties
+index 43dab47..1d0f9f1 100644
+--- a/core/src/main/resources/runtime-properties/default-shared.properties
++++ b/core/src/main/resources/runtime-properties/default-shared.properties
+@@ -33,10 +33,10 @@ asset.server.file.classpath.directory=/cms/static
+ # In non-development environments, this defaults to "/broadleaf/assets".
+ asset.server.file.system.path=
+ 
+-blPU.hibernate.hbm2ddl.auto=create
++blPU.hibernate.hbm2ddl.auto=update
+ blCMSStorage.hibernate.hbm2ddl.auto=update
+ blSecurePU.hibernate.hbm2ddl.auto=update
+-blEventPU.hibernate.hbm2ddl.auto=create
++blEventPU.hibernate.hbm2ddl.auto=update
+ 
+ # Cache page templates for just 2 seconds in development (allows for caching during a single request)
+ cache.page.templates.ttl=2000
+diff --git a/pom.xml b/pom.xml
+index a4950f8..5c69841 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -84,6 +84,12 @@
+                 <artifactId>boot-community-demo-core</artifactId>
+                 <version>${project.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.hibernate.validator</groupId>
++                <artifactId>hibernate-validator</artifactId>
++                <version>6.0.17.Final</version>
++                <scope>compile</scope>
++            </dependency>
+         </dependencies>
+     </dependencyManagement>
+ 
+diff --git a/site/pom.xml b/site/pom.xml
+index c5f115a..910314a 100644
+--- a/site/pom.xml
++++ b/site/pom.xml
+@@ -27,7 +27,16 @@
+             <plugin>
+                 <groupId>org.springframework.boot</groupId>
+                 <artifactId>spring-boot-maven-plugin</artifactId>
+-            </plugin>
++		        <configuration>
++                    <executable>true</executable>
++                    <jvmArguments>
++                        -Xms4g
++                        -Xmx4g
++                        -XX:MetaspaceSize=512M
++                        -Dhttp.maxConnections=1024
++                    </jvmArguments>
++                </configuration>
++	    </plugin>
+         </plugins>
+     </build>
+     
+@@ -50,7 +59,11 @@
+         </dependency>
+         <dependency>
+             <groupId>com.broadleafcommerce</groupId>
+-            <artifactId>broadleaf-boot-starter-hsql-database</artifactId>
++            <artifactId>broadleaf-boot-starter-database</artifactId>
++        </dependency>
++        <dependency>
++            <groupId>mysql</groupId>
++            <artifactId>mysql-connector-java</artifactId>
+         </dependency>
+         <dependency>
+             <groupId>org.broadleafcommerce</groupId>
+diff --git a/site/src/main/java/com/community/configuration/SiteSecurityConfig.java b/site/src/main/java/com/community/configuration/SiteSecurityConfig.java
+index 166b54b..ec75cbb 100644
+--- a/site/src/main/java/com/community/configuration/SiteSecurityConfig.java
++++ b/site/src/main/java/com/community/configuration/SiteSecurityConfig.java
+@@ -147,8 +147,7 @@ public class SiteSecurityConfig extends WebSecurityConfigurerAdapter {
+                 .deleteCookies("ActiveID")
+                 .logoutUrl("/logout")
+                 .and()
+-            .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+-            .addFilterBefore(sessionFixationProtectionFilter, SessionManagementFilter.class);
++            .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class);
+     }
+ 
+     /**
+diff --git a/site/src/main/resources/runtime-properties/default.properties b/site/src/main/resources/runtime-properties/default.properties
+index 471f694..f492a74 100644
+--- a/site/src/main/resources/runtime-properties/default.properties
++++ b/site/src/main/resources/runtime-properties/default.properties
+@@ -6,8 +6,8 @@
+ 
+ # Please see common-shared.properties for more information on how the properties files work
+ 
+-blPU.hibernate.hbm2ddl.auto=create
+-blEventPU.hibernate.hbm2ddl.auto=create
++blPU.hibernate.hbm2ddl.auto=update
++blEventPU.hibernate.hbm2ddl.auto=update
+ 
+ jmx.app.name=site
+ http.server.port=8080
+diff --git a/site/src/main/resources/webTemplates/layout/partials/head.html b/site/src/main/resources/webTemplates/layout/partials/head.html
+index 63e4639..4deb3ce 100644
+--- a/site/src/main/resources/webTemplates/layout/partials/head.html
++++ b/site/src/main/resources/webTemplates/layout/partials/head.html
+@@ -64,6 +64,6 @@
+ <blc:googleExperiments execute="true" ></blc:googleExperiments>
+ <th:block th:utext="${experimentInfo}"></th:block>
+ 
+-<blc:google_universal_analytics ordernumber="${order?.orderNumber}" ></blc:google_universal_analytics>
++<!-- <blc:google_universal_analytics ordernumber="${order?.orderNumber}" ></blc:google_universal_analytics> -->
+ 
+ <meta th:if="${#props.get('google.website.translator.contentKey') != null}" name="google-translate-customization" th:attr="content=${#props.get('google.website.translator.contentKey')}"></meta>

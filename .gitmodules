@@ -1,0 +1,21 @@
+[submodule "spree/spree_starter"]
+	path = spree/spree_starter
+	url = git@github.com:project-concerto/spree_starter.git
+[submodule "spree/spree"]
+	path = spree/spree
+	url = https://github.com/spree/spree.git
+[submodule "broadleaf/broadleafcommerce"]
+	path = broadleaf/broadleafcommerce
+	url = https://github.com/BroadleafCommerce/BroadleafCommerce
+[submodule "broadleaf/DemoSite"]
+	path = broadleaf/DemoSite
+	url = https://github.com/BroadleafCommerce/DemoSite
+[submodule "broadleaf/broadleaf-boot-starter-database"]
+	path = broadleaf/broadleaf-boot-starter-database
+	url = https://github.com/BroadleafCommerce/DatabaseStarter
+[submodule "discourse/discourse"]
+	path = discourse/discourse
+	url = https://github.com/discourse/discourse
+[submodule "discourse/discourse-solved"]
+	path = discourse/discourse-solved
+	url = https://github.com/discourse/discourse-solved

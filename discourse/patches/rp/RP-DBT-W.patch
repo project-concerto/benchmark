@@ -1,0 +1,732 @@
+diff --git a/app/models/post.rb b/app/models/post.rb
+index 0ad5e7738a..83f11c10a1 100644
+--- a/app/models/post.rb
++++ b/app/models/post.rb
+@@ -928,11 +928,11 @@ class Post < ActiveRecord::Base
+     end
+ 
+     PostUpload.transaction do
+-      PostUpload.where(post_id: self.id).delete_all
++      # PostUpload.where(post_id: self.id).delete_all
+ 
+-      if post_uploads.size > 0
+-        PostUpload.insert_all(post_uploads)
+-      end
++      # if post_uploads.size > 0
++      #   PostUpload.insert_all(post_uploads)
++      # end
+ 
+       if SiteSetting.secure_media?
+         Upload.where(
+diff --git a/config/application.rb b/config/application.rb
+index d84148df11..b6e4b1f714 100644
+--- a/config/application.rb
++++ b/config/application.rb
+@@ -70,13 +70,13 @@ end
+ module Discourse
+   class Application < Rails::Application
+ 
+-    def config.database_configuration
+-      if Rails.env.production?
+-        GlobalSetting.database_config
+-      else
+-        super
+-      end
+-    end
++    # def config.database_configuration
++    #   if Rails.env.production?
++    #     GlobalSetting.database_config
++    #   else
++    #     super
++    #   end
++    # end
+     # Settings in config/environments/* take precedence over those specified here.
+     # Application configuration should go into files in config/initializers
+     # -- all .rb files in that directory are automatically loaded.
+diff --git a/config/database.yml b/config/database.yml
+index 32be4265b8..6191f8536f 100644
+--- a/config/database.yml
++++ b/config/database.yml
+@@ -2,8 +2,10 @@ development:
+   prepared_statements: false
+   adapter: postgresql
+   database: <%= ENV['DISCOURSE_DEV_DB'] || 'discourse_development' %>
++  host: localhost
++  username: root
+   min_messages: warning
+-  pool: 5
++  pool: 2048
+   timeout: 5000
+   checkout_timeout: <%= ENV['CHECKOUT_TIMEOUT'] || 5 %>
+   advisory_locks: false # Disable until https://github.com/rails/rails/issues/40029 has beeen resolved.
+@@ -12,7 +14,7 @@ development:
+     ### If you change this setting you will need to
+     ###   - restart sidekiq if you change this setting
+     ###   - rebake all to posts using: `RAILS_ENV=production bundle exec rake posts:rebake`
+-    - "localhost"
++    - "hostname"
+ 
+ # Warning: The database defined as "test" will be erased and
+ # re-generated from your development database when you run "rake".
+@@ -34,6 +36,8 @@ test:
+   prepared_statements: false
+   adapter: postgresql
+   database: <%= test_db %>
++  host: localhost
++  username: root
+   min_messages: warning
+   pool: 5
+   timeout: 5000
+@@ -56,3 +60,21 @@ profile:
+ #
+ # 1. we need to support blank settings correctly and rendering nothing in yaml/erb is a PITA
+ # 2. why go from object -> yaml -> object, pointless
++
++production:
++  prepared_statements: false
++  adapter: postgresql
++  database: <%= ENV['DISCOURSE_DEV_DB'] || 'discourse' %>
++  min_messages: warning
++  host: localhost
++  username: root
++  pool: 2048
++  timeout: 5000
++  checkout_timeout: <%= ENV['CHECKOUT_TIMEOUT'] || 5 %>
++  advisory_locks: false # Disable until https://github.com/rails/rails/issues/40029 has beeen resolved.
++  host_names:
++    ### Don't include the port number here. Change the "port" site setting instead, at /admin/site_settings.
++    ### If you change this setting you will need to
++    ###   - restart sidekiq if you change this setting
++    ###   - rebake all to posts using: `RAILS_ENV=production bundle exec rake posts:rebake`
++    - "hostname"
+diff --git a/config/discourse_defaults.conf b/config/discourse_defaults.conf
+index c7250354b4..a8ecfaaf58 100644
+--- a/config/discourse_defaults.conf
++++ b/config/discourse_defaults.conf
+@@ -209,22 +209,22 @@ s3_http_continue_timeout =
+ s3_install_cors_rule =
+ 
+ ### rate limits apply to all sites
+-max_user_api_reqs_per_minute = 20
+-max_user_api_reqs_per_day = 2880
++max_user_api_reqs_per_minute = 999999999
++max_user_api_reqs_per_day = 999999999
+ 
+-max_admin_api_reqs_per_key_per_minute = 60
++max_admin_api_reqs_per_key_per_minute = 999999999
+ 
+-max_reqs_per_ip_per_minute = 200
+-max_reqs_per_ip_per_10_seconds = 50
++max_reqs_per_ip_per_minute = 999999999
++max_reqs_per_ip_per_10_seconds = 999999999
+ 
+ # applies to asset type routes (avatars/css and so on)
+-max_asset_reqs_per_ip_per_10_seconds = 200
++max_asset_reqs_per_ip_per_10_seconds = 999999999
+ 
+ # global rate limiter will simply warn if the limit is exceeded, can be warn+block, warn, block or none
+-max_reqs_per_ip_mode = block
++max_reqs_per_ip_mode = none
+ 
+ # bypass rate limiting any IP resolved as a private IP
+-max_reqs_rate_limit_on_private = false
++max_reqs_rate_limit_on_private = true
+ 
+ # logged in DoS protection
+ 
+diff --git a/config/environments/production.rb b/config/environments/production.rb
+index 75c3a69512..de99cc5dd4 100644
+--- a/config/environments/production.rb
++++ b/config/environments/production.rb
+@@ -6,14 +6,15 @@ Discourse::Application.configure do
+   # Code is not reloaded between requests
+   config.cache_classes = true
+   config.eager_load = true
++  config.hosts << "localhost"
+ 
+   # Full error reports are disabled and caching is turned on
+   config.consider_all_requests_local       = false
+   config.action_controller.perform_caching = true
+ 
+   # Disable Rails's static asset server (Apache or nginx will already do this)
+-  config.public_file_server.enabled = GlobalSetting.serve_static_assets || false
+-
++  # config.public_file_server.enabled = GlobalSetting.serve_static_assets || false
++  config.public_file_server.enabled = true
+   config.assets.js_compressor = :uglifier
+ 
+   # stuff should be pre-compiled
+diff --git a/config/puma.rb b/config/puma.rb
+index e237b06d20..9f6ba2342b 100644
+--- a/config/puma.rb
++++ b/config/puma.rb
+@@ -1,21 +1,5 @@
+ # frozen_string_literal: true
+ 
+-if ENV['RAILS_ENV'] == 'production'
+-
+-  # First, you need to change these below to your situation.
+-  APP_ROOT = '/home/discourse/discourse'
+-  num_workers = ENV["NUM_WEBS"].to_i > 0 ? ENV["NUM_WEBS"].to_i : 4
+-
+-  # Second, you can choose how many threads that you are going to run at same time.
+-  workers "#{num_workers}"
+-  threads 8, 32
+-
+-  # Unless you know what you are changing, do not change them.
+-  bind "unix://#{APP_ROOT}/tmp/sockets/puma.sock"
+-  stdout_redirect "#{APP_ROOT}/log/puma.log", "#{APP_ROOT}/log/puma.err.log"
+-  pidfile "#{APP_ROOT}/tmp/pids/puma.pid"
+-  state_path "#{APP_ROOT}/tmp/pids/puma.state"
+-  daemonize true
+-  preload_app!
+-
+-end
++num_workers = 48
++workers "#{num_workers}"
++threads 8, 32
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index 9e48178c2d..8ea74679d2 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -706,7 +706,7 @@ posting:
+     locale_default:
+       ja: true
+   max_consecutive_replies:
+-    default: 3
++    default: 999999999
+   title_prettify:
+     default: true
+     locale_default:
+@@ -755,7 +755,7 @@ posting:
+     type: category
+     default: ""
+   post_edit_time_limit:
+-    default: 1440
++    default: 0
+     max: 10080
+   tl2_post_edit_time_limit:
+     default: 43200
+@@ -811,8 +811,8 @@ posting:
+     client: true
+   max_mentions_per_post: 10
+   max_users_notified_per_group_mention: 100
+-  newuser_max_replies_per_topic: 3
+-  newuser_max_mentions_per_post: 2
++  newuser_max_replies_per_topic: 999999999
++  newuser_max_mentions_per_post: 999999999
+   title_max_word_length:
+     default: 30
+     locale_default:
+@@ -1283,7 +1283,7 @@ files:
+   allow_profile_backgrounds:
+     client: true
+     default: true
+-  automatically_download_gravatars: true
++  automatically_download_gravatars: false
+   allow_uploaded_avatars:
+     client: true
+     default: true
+@@ -1523,7 +1523,7 @@ security:
+     list_type: compact
+   slow_down_crawler_rate: 60
+   content_security_policy:
+-    default: true
++    default: false
+   content_security_policy_report_only:
+     default: false
+   content_security_policy_collect_reports:
+@@ -1628,11 +1628,11 @@ spam:
+     enum: "ReviewablePrioritySetting"
+ 
+ rate_limits:
+-  unique_posts_mins: 5
+-  rate_limit_create_topic: 15
+-  rate_limit_create_post: 5
+-  rate_limit_new_user_create_topic: 120
+-  rate_limit_new_user_create_post: 30
++  unique_posts_mins: 0
++  rate_limit_create_topic: 0
++  rate_limit_create_post: 0
++  rate_limit_new_user_create_topic: 0
++  rate_limit_new_user_create_post: 0
+   rate_limit_search_anon_global:
+     hidden: true
+     default: 150
+@@ -1642,16 +1642,16 @@ rate_limits:
+   rate_limit_search_user:
+     hidden: true
+     default: 30
+-  max_topics_per_day: 20
+-  max_personal_messages_per_day: 20
+-  max_likes_per_day: 50
+-  max_bookmarks_per_day: 20
+-  max_flags_per_day: 20
+-  max_edits_per_day: 30
+-  max_invites_per_day: 10
+-  max_topic_invitations_per_day: 30
+-  max_topics_in_first_day: 3
+-  max_replies_in_first_day: 10
++  max_topics_per_day: 999999999
++  max_personal_messages_per_day: 999999999
++  max_likes_per_day: 999999999
++  max_bookmarks_per_day: 999999999
++  max_flags_per_day: 999999999
++  max_edits_per_day: 999999999
++  max_invites_per_day: 999999999
++  max_topic_invitations_per_day: 999999999
++  max_topics_in_first_day: 999999999
++  max_replies_in_first_day: 999999999
+   tl2_additional_likes_per_day_multiplier: 1.5
+   tl3_additional_likes_per_day_multiplier: 2
+   tl4_additional_likes_per_day_multiplier: 3
+@@ -1666,16 +1666,16 @@ rate_limits:
+     client: true
+   max_logins_per_ip_per_hour:
+     min: 1
+-    default: 30
++    default: 999999999
+   max_logins_per_ip_per_minute:
+     min: 1
+-    default: 6
++    default: 999999999
+   max_post_deletions_per_minute:
+     min: 1
+-    default: 2
++    default: 999999999
+   max_post_deletions_per_day:
+     min: 1
+-    default: 10
++    default: 999999999
+   invite_link_max_redemptions_limit:
+     min: 2
+     max: 1000000
+diff --git a/lib/auth/default_current_user_provider.rb b/lib/auth/default_current_user_provider.rb
+index d2545179ff..911c5d261d 100644
+--- a/lib/auth/default_current_user_provider.rb
++++ b/lib/auth/default_current_user_provider.rb
+@@ -353,7 +353,7 @@ class Auth::DefaultCurrentUserProvider
+         end
+ 
+       if user && can_write?
+-        api_key.update_columns(last_used_at: Time.zone.now)
++        # api_key.update_columns(last_used_at: Time.zone.now)
+       end
+ 
+       user
+diff --git a/lib/post_creator.rb b/lib/post_creator.rb
+index 7c19f663ce..a723094bac 100644
+--- a/lib/post_creator.rb
++++ b/lib/post_creator.rb
+@@ -429,7 +429,7 @@ class PostCreator
+   def track_latest_on_category
+     return unless @post && @post.errors.count == 0 && @topic && @topic.category_id
+ 
+-    Category.where(id: @topic.category_id).update_all(latest_post_id: @post.id)
++    # Category.where(id: @topic.category_id).update_all(latest_post_id: @post.id)
+     Category.where(id: @topic.category_id).update_all(latest_topic_id: @topic.id) if @post.is_first_post?
+   end
+ 
+diff --git a/lib/post_revisor.rb b/lib/post_revisor.rb
+index a9912d6dfb..e876f55635 100644
+--- a/lib/post_revisor.rb
++++ b/lib/post_revisor.rb
+@@ -163,23 +163,24 @@ class PostRevisor
+     end
+ 
+     old_raw = @post.raw
+-
+-    Post.transaction do
+-      revise_post
+-
+-      yield if block_given?
+-      # TODO: these callbacks are being called in a transaction
+-      # it is kind of odd, because the callback is called "before_edit"
+-      # but the post is already edited at this point
+-      # Trouble is that much of the logic of should I edit? is deeper
+-      # down so yanking this in front of the transaction will lead to
+-      # false positive.
+-      plugin_callbacks
+-
+-      revise_topic
+-      advance_draft_sequence
++    DistributedMutex.synchronize("process_post_#{@post.id}") do
++      Post.transaction do
++        revise_post
++
++        yield if block_given?
++        # TODO: these callbacks are being called in a transaction
++        # it is kind of odd, because the callback is called "before_edit"
++        # but the post is already edited at this point
++        # Trouble is that much of the logic of should I edit? is deeper
++        # down so yanking this in front of the transaction will lead to
++        # false positive.
++        plugin_callbacks
++
++        revise_topic
++        advance_draft_sequence
++      end
+     end
+-
++    
+     # Lock the post by default if the appropriate setting is true
+     if (
+       SiteSetting.staff_edit_locks_post? &&
+diff --git a/lib/shrink_uploaded_image.rb b/lib/shrink_uploaded_image.rb
+index 43416ade0d..686c62caa3 100644
+--- a/lib/shrink_uploaded_image.rb
++++ b/lib/shrink_uploaded_image.rb
+@@ -69,144 +69,161 @@ class ShrinkUploadedImage
+     log "sha: #{original_upload.sha1} -> #{sha1}"
+     log "(an exisiting upload)" if existing_upload
+ 
++    rollback = false
+     success = true
+-    posts = Post.unscoped.joins(:post_uploads).where(post_uploads: { upload_id: original_upload.id }).uniq.sort_by(&:created_at)
+-
+-    posts.each do |post|
+-      transform_post(post, original_upload, upload)
+-
+-      if post.custom_fields[Post::DOWNLOADED_IMAGES].present?
+-        downloaded_images = JSON.parse(post.custom_fields[Post::DOWNLOADED_IMAGES])
++    Post.transaction(isolation: :read_committed) do
++      posts = Post.unscoped.joins(:post_uploads).where(post_uploads: { upload_id: original_upload.id }).uniq.sort_by(&:created_at)
++      posts.each do |post|
++        transform_post(post, original_upload, upload)
++      
++        if post.custom_fields[Post::DOWNLOADED_IMAGES].present?
++          downloaded_images = JSON.parse(post.custom_fields[Post::DOWNLOADED_IMAGES])
++        end
++      
++        if post.raw_changed?
++          log "Updating post"
++        elsif downloaded_images&.has_value?(original_upload.id)
++          log "A hotlinked, unreferenced image"
++        elsif post.raw.include?(upload.short_url)
++          log "Already processed"
++        elsif post.trashed?
++          log "A deleted post"
++        elsif !post.topic || post.topic.trashed?
++          log "A deleted topic"
++        elsif post.cooked.include?(original_upload.sha1)
++          if post.raw.include?("#{Discourse.base_url.sub(/^https?:\/\//i, "")}/t/")
++            log "Updating a topic onebox"
++          else
++            log "Updating an external onebox"
++          end
++        else
++          log "Could not find the upload URL"
++          success = false
++        end
++      
++        log "#{Discourse.base_url}/p/#{post.id}"
+       end
+-
+-      if post.raw_changed?
+-        log "Updating post"
+-      elsif downloaded_images&.has_value?(original_upload.id)
+-        log "A hotlinked, unreferenced image"
+-      elsif post.raw.include?(upload.short_url)
+-        log "Already processed"
+-      elsif post.trashed?
+-        log "A deleted post"
+-      elsif !post.topic || post.topic.trashed?
+-        log "A deleted topic"
+-      elsif post.cooked.include?(original_upload.sha1)
+-        if post.raw.include?("#{Discourse.base_url.sub(/^https?:\/\//i, "")}/t/")
+-          log "Updating a topic onebox"
++    
++    
++      if posts.empty?
++        log "Upload not used in any posts"
++      
++        if User.where(uploaded_avatar_id: original_upload.id).exists?
++          log "Used as a User avatar"
++        elsif UserAvatar.where(gravatar_upload_id: original_upload.id).exists?
++          log "Used as a UserAvatar gravatar"
++        elsif UserAvatar.where(custom_upload_id: original_upload.id).exists?
++          log "Used as a UserAvatar custom upload"
++        elsif UserProfile.where(profile_background_upload_id: original_upload.id).exists?
++          log "Used as a UserProfile profile background"
++        elsif UserProfile.where(card_background_upload_id: original_upload.id).exists?
++          log "Used as a UserProfile card background"
++        elsif Category.where(uploaded_logo_id: original_upload.id).exists?
++          log "Used as a Category logo"
++        elsif Category.where(uploaded_background_id: original_upload.id).exists?
++          log "Used as a Category background"
++        elsif CustomEmoji.where(upload_id: original_upload.id).exists?
++          log "Used as a CustomEmoji"
++        elsif ThemeField.where(upload_id: original_upload.id).exists?
++          log "Used as a ThemeField"
+         else
+-          log "Updating an external onebox"
++          success = false
+         end
+-      else
+-        log "Could not find the upload URL"
+-        success = false
+       end
+-
+-      log "#{Discourse.base_url}/p/#{post.id}"
+-    end
+-
+-    if posts.empty?
+-      log "Upload not used in any posts"
+-
+-      if User.where(uploaded_avatar_id: original_upload.id).exists?
+-        log "Used as a User avatar"
+-      elsif UserAvatar.where(gravatar_upload_id: original_upload.id).exists?
+-        log "Used as a UserAvatar gravatar"
+-      elsif UserAvatar.where(custom_upload_id: original_upload.id).exists?
+-        log "Used as a UserAvatar custom upload"
+-      elsif UserProfile.where(profile_background_upload_id: original_upload.id).exists?
+-        log "Used as a UserProfile profile background"
+-      elsif UserProfile.where(card_background_upload_id: original_upload.id).exists?
+-        log "Used as a UserProfile card background"
+-      elsif Category.where(uploaded_logo_id: original_upload.id).exists?
+-        log "Used as a Category logo"
+-      elsif Category.where(uploaded_background_id: original_upload.id).exists?
+-        log "Used as a Category background"
+-      elsif CustomEmoji.where(upload_id: original_upload.id).exists?
+-        log "Used as a CustomEmoji"
+-      elsif ThemeField.where(upload_id: original_upload.id).exists?
+-        log "Used as a ThemeField"
+-      else
+-        success = false
++    
++      unless success
++        if @interactive
++          print "Press any key to continue with the upload"
++          STDIN.beep
++          STDIN.getch
++          puts " k"
++        else
++          if !existing_upload && !Upload.where(url: upload.url).exists?
++            # We're bailing, so clean up the just uploaded file
++            Discourse.store.remove_upload(upload)
++          end
++        
++          log "⏩ Skipping"
++          return false
++        end
+       end
+-    end
+-
+-    unless success
+-      if @interactive
+-        print "Press any key to continue with the upload"
+-        STDIN.beep
+-        STDIN.getch
+-        puts " k"
+-      else
++    
++      unless upload.save
+         if !existing_upload && !Upload.where(url: upload.url).exists?
+           # We're bailing, so clean up the just uploaded file
+           Discourse.store.remove_upload(upload)
+         end
+-
+-        log "⏩ Skipping"
++      
++        log "⏩ Skipping an invalid upload"
+         return false
+       end
+-    end
+-
+-    unless upload.save
+-      if !existing_upload && !Upload.where(url: upload.url).exists?
+-        # We're bailing, so clean up the just uploaded file
+-        Discourse.store.remove_upload(upload)
+-      end
+-
+-      log "⏩ Skipping an invalid upload"
+-      return false
+-    end
+-
+-    if existing_upload
+-      begin
+-        PostUpload.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
+-      rescue ActiveRecord::RecordNotUnique, PG::UniqueViolation
+-      end
+-
+-      User.where(uploaded_avatar_id: original_upload.id).update_all(uploaded_avatar_id: upload.id)
+-      UserAvatar.where(gravatar_upload_id: original_upload.id).update_all(gravatar_upload_id: upload.id)
+-      UserAvatar.where(custom_upload_id: original_upload.id).update_all(custom_upload_id: upload.id)
+-      UserProfile.where(profile_background_upload_id: original_upload.id).update_all(profile_background_upload_id: upload.id)
+-      UserProfile.where(card_background_upload_id: original_upload.id).update_all(card_background_upload_id: upload.id)
+-      Category.where(uploaded_logo_id: original_upload.id).update_all(uploaded_logo_id: upload.id)
+-      Category.where(uploaded_background_id: original_upload.id).update_all(uploaded_background_id: upload.id)
+-      CustomEmoji.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
+-      ThemeField.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
+-    else
+-      upload.optimized_images.each(&:destroy!)
+-    end
+-
+-    posts.each do |post|
+-      DistributedMutex.synchronize("process_post_#{post.id}") do
+-        current_post = Post.unscoped.find(post.id)
+-
+-        # If the post became outdated, reapply changes
+-        if current_post.updated_at != post.updated_at
+-          transform_post(current_post, original_upload, upload)
+-          post = current_post
+-        end
+-
+-        if post.raw_changed?
+-          post.update_columns(
+-            raw: post.raw,
+-            updated_at: Time.zone.now
+-          )
++    
++      if existing_upload
++        begin
++          PostUpload.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
++        rescue ActiveRecord::RecordNotUnique, PG::UniqueViolation
+         end
+-
+-        if existing_upload && post.custom_fields[Post::DOWNLOADED_IMAGES].present?
+-          downloaded_images = JSON.parse(post.custom_fields[Post::DOWNLOADED_IMAGES])
+-
+-          downloaded_images.transform_values! do |upload_id|
+-            upload_id == original_upload.id ? upload.id : upload_id
++      
++        User.where(uploaded_avatar_id: original_upload.id).update_all(uploaded_avatar_id: upload.id)
++        UserAvatar.where(gravatar_upload_id: original_upload.id).update_all(gravatar_upload_id: upload.id)
++        UserAvatar.where(custom_upload_id: original_upload.id).update_all(custom_upload_id: upload.id)
++        UserProfile.where(profile_background_upload_id: original_upload.id).update_all(profile_background_upload_id: upload.id)
++        UserProfile.where(card_background_upload_id: original_upload.id).update_all(card_background_upload_id: upload.id)
++        Category.where(uploaded_logo_id: original_upload.id).update_all(uploaded_logo_id: upload.id)
++        Category.where(uploaded_background_id: original_upload.id).update_all(uploaded_background_id: upload.id)
++        CustomEmoji.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
++        ThemeField.where(upload_id: original_upload.id).update_all(upload_id: upload.id)
++      else
++        upload.optimized_images.each(&:destroy!)
++      end
++    
++      posts.each do |post|
++        DistributedMutex.synchronize("process_post_#{post.id}") do
++          current_post = Post.unscoped.find(post.id)
++      
++          # If the post became outdated, reapply changes
++          if current_post.updated_at != post.updated_at
++            # transform_post(current_post, original_upload, upload)
++            # post = current_post
++            rollback = true
++            raise ActiveRecord::Rollback
+           end
+-
+-          post.custom_fields[Post::DOWNLOADED_IMAGES] = downloaded_images.to_json if downloaded_images.present?
+-          post.save_custom_fields
++        
++          if post.raw_changed?
++            post.update_columns(
++              raw: post.raw,
++              updated_at: Time.zone.now
++            )
++          end
++        
++          if existing_upload && post.custom_fields[Post::DOWNLOADED_IMAGES].present?
++            downloaded_images = JSON.parse(post.custom_fields[Post::DOWNLOADED_IMAGES])
++          
++            downloaded_images.transform_values! do |upload_id|
++              upload_id == original_upload.id ? upload.id : upload_id
++            end
++          
++            post.custom_fields[Post::DOWNLOADED_IMAGES] = downloaded_images.to_json if downloaded_images.present?
++            post.save_custom_fields
++          end
++        
++          post.rebake!
+         end
+-
+-        post.rebake!
+       end
+     end
+ 
++    if rollback
++      upload.attributes = {
++        sha1: original_upload.sha1,
++        width: original_upload.width,
++        height: original_upload.height,
++        thumbnail_width: original_upload.thumbnail_width,
++        thumbnail_height: original_upload.thumbnail_height,
++        filesize: original_upload.filesize
++      }
++      return false
++    end
++    
+     if existing_upload
+       original_upload.reload.destroy!
+     else
+diff --git a/script/downsize_uploads.rb b/script/downsize_uploads.rb
+index 7fcb1e6431..292ac27e86 100644
+--- a/script/downsize_uploads.rb
++++ b/script/downsize_uploads.rb
+@@ -1,7 +1,7 @@
+ # frozen_string_literal: true
+ 
+ require File.expand_path("../../config/environment", __FILE__)
+-
++require "benchmark"
+ # Supported ENV arguments:
+ #
+ # VERBOSE=1
+@@ -52,7 +52,12 @@ def process_uploads
+   total_count = scope.count
+   puts "Uploads to process: #{total_count}"
+ 
++  start_time_of_first_image = 0
++  end_time_of_first_image = 0
+   scope.find_each.with_index do |upload, index|
++    if index == 0
++      start_time_of_first_image = Time.now
++    end
+     progress = (index * 100.0 / total_count).round(1)
+ 
+     log "\n"
+@@ -120,22 +125,37 @@ def process_uploads
+       next
+     end
+ 
+-    result = ShrinkUploadedImage.new(
+-      upload: upload,
+-      path: path,
+-      max_pixels: MAX_IMAGE_PIXELS,
+-      verbose: ENV["VERBOSE"],
+-      interactive: ENV["INTERACTIVE"]
+-    ).perform
++    result = false
++    cnt = 0
++    time = Benchmark.measure{
++      while !result
++        result = ShrinkUploadedImage.new(
++          upload: upload,
++          path: path,
++          max_pixels: MAX_IMAGE_PIXELS,
++          verbose: ENV["VERBOSE"],
++          interactive: ENV["INTERACTIVE"]
++        ).perform
++        cnt += 1
++      end
++    }
++    puts ""
++    puts "Try Count: #{cnt}"
++    puts "Time For an Image: #{time.real}"
+ 
+     if result
+       downsized_count += 1
+     else
+       skipped += 1
+     end
++    if index == 0
++      end_time_of_first_image = Time.now
++      duration = end_time_of_first_image - start_time_of_first_image
++      puts "Time For First Image: #{duration}"
++    end
+   end
+ 
+-  STDIN.beep
++  # STDIN.beep
+   puts "", "Done", Time.zone.now
+ end
+ 

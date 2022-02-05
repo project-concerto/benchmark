@@ -1,0 +1,313 @@
+diff --git a/config/application.rb b/config/application.rb
+index d84148df11..b6e4b1f714 100644
+--- a/config/application.rb
++++ b/config/application.rb
+@@ -70,13 +70,13 @@ end
+ module Discourse
+   class Application < Rails::Application
+ 
+-    def config.database_configuration
+-      if Rails.env.production?
+-        GlobalSetting.database_config
+-      else
+-        super
+-      end
+-    end
++    # def config.database_configuration
++    #   if Rails.env.production?
++    #     GlobalSetting.database_config
++    #   else
++    #     super
++    #   end
++    # end
+     # Settings in config/environments/* take precedence over those specified here.
+     # Application configuration should go into files in config/initializers
+     # -- all .rb files in that directory are automatically loaded.
+diff --git a/config/database.yml b/config/database.yml
+index 32be4265b8..11f705254e 100644
+--- a/config/database.yml
++++ b/config/database.yml
+@@ -2,8 +2,10 @@ development:
+   prepared_statements: false
+   adapter: postgresql
+   database: <%= ENV['DISCOURSE_DEV_DB'] || 'discourse_development' %>
++  host: localhost
++  username: root
+   min_messages: warning
+-  pool: 5
++  pool: 2048
+   timeout: 5000
+   checkout_timeout: <%= ENV['CHECKOUT_TIMEOUT'] || 5 %>
+   advisory_locks: false # Disable until https://github.com/rails/rails/issues/40029 has beeen resolved.
+@@ -12,7 +14,7 @@ development:
+     ### If you change this setting you will need to
+     ###   - restart sidekiq if you change this setting
+     ###   - rebake all to posts using: `RAILS_ENV=production bundle exec rake posts:rebake`
+-    - "localhost"
++    - "hostname"
+ 
+ # Warning: The database defined as "test" will be erased and
+ # re-generated from your development database when you run "rake".
+@@ -34,6 +36,8 @@ test:
+   prepared_statements: false
+   adapter: postgresql
+   database: <%= test_db %>
++  host: localhost
++  username: root
+   min_messages: warning
+   pool: 5
+   timeout: 5000
+@@ -56,3 +60,21 @@ profile:
+ #
+ # 1. we need to support blank settings correctly and rendering nothing in yaml/erb is a PITA
+ # 2. why go from object -> yaml -> object, pointless
++
++production:
++  prepared_statements: false
++  adapter: postgresql
++  database: <%= ENV['DISCOURSE_DEV_DB'] || 'discourse' %>
++  min_messages: warning
++  host: localhost
++  username: root
++  pool: 2048
++  timeout: 5000
++  checkout_timeout: <%= ENV['CHECKOUT_TIMEOUT'] || 5 %>
++  advisory_locks: false # Disable until https://github.com/rails/rails/issues/40029 has beeen resolved.
++  host_names:
++    ### Don't include the port number here. Change the "port" site setting instead, at /admin/site_settings.
++    ### If you change this setting you will need to
++    ###   - restart sidekiq if you change this setting
++    ###   - rebake all to posts using: `RAILS_ENV=production bundle exec rake posts:rebake`
++    - "hostname"
+diff --git a/config/discourse_defaults.conf b/config/discourse_defaults.conf
+index c7250354b4..a8ecfaaf58 100644
+--- a/config/discourse_defaults.conf
++++ b/config/discourse_defaults.conf
+@@ -209,22 +209,22 @@ s3_http_continue_timeout =
+ s3_install_cors_rule =
+ 
+ ### rate limits apply to all sites
+-max_user_api_reqs_per_minute = 20
+-max_user_api_reqs_per_day = 2880
++max_user_api_reqs_per_minute = 999999999
++max_user_api_reqs_per_day = 999999999
+ 
+-max_admin_api_reqs_per_key_per_minute = 60
++max_admin_api_reqs_per_key_per_minute = 999999999
+ 
+-max_reqs_per_ip_per_minute = 200
+-max_reqs_per_ip_per_10_seconds = 50
++max_reqs_per_ip_per_minute = 999999999
++max_reqs_per_ip_per_10_seconds = 999999999
+ 
+ # applies to asset type routes (avatars/css and so on)
+-max_asset_reqs_per_ip_per_10_seconds = 200
++max_asset_reqs_per_ip_per_10_seconds = 999999999
+ 
+ # global rate limiter will simply warn if the limit is exceeded, can be warn+block, warn, block or none
+-max_reqs_per_ip_mode = block
++max_reqs_per_ip_mode = none
+ 
+ # bypass rate limiting any IP resolved as a private IP
+-max_reqs_rate_limit_on_private = false
++max_reqs_rate_limit_on_private = true
+ 
+ # logged in DoS protection
+ 
+diff --git a/config/environments/production.rb b/config/environments/production.rb
+index 75c3a69512..109e0e57ed 100644
+--- a/config/environments/production.rb
++++ b/config/environments/production.rb
+@@ -6,14 +6,15 @@ Discourse::Application.configure do
+   # Code is not reloaded between requests
+   config.cache_classes = true
+   config.eager_load = true
++  config.hosts << "localhost"
+ 
+   # Full error reports are disabled and caching is turned on
+   config.consider_all_requests_local       = false
+   config.action_controller.perform_caching = true
+ 
+   # Disable Rails's static asset server (Apache or nginx will already do this)
+-  config.public_file_server.enabled = GlobalSetting.serve_static_assets || false
+-
++  # config.public_file_server.enabled = GlobalSetting.serve_static_assets || false
++  config.public_file_server.enabled = true
+   config.assets.js_compressor = :uglifier
+ 
+   # stuff should be pre-compiled
+diff --git a/config/puma.rb b/config/puma.rb
+index e237b06d20..9f6ba2342b 100644
+--- a/config/puma.rb
++++ b/config/puma.rb
+@@ -1,21 +1,5 @@
+ # frozen_string_literal: true
+ 
+-if ENV['RAILS_ENV'] == 'production'
+-
+-  # First, you need to change these below to your situation.
+-  APP_ROOT = '/home/discourse/discourse'
+-  num_workers = ENV["NUM_WEBS"].to_i > 0 ? ENV["NUM_WEBS"].to_i : 4
+-
+-  # Second, you can choose how many threads that you are going to run at same time.
+-  workers "#{num_workers}"
+-  threads 8, 32
+-
+-  # Unless you know what you are changing, do not change them.
+-  bind "unix://#{APP_ROOT}/tmp/sockets/puma.sock"
+-  stdout_redirect "#{APP_ROOT}/log/puma.log", "#{APP_ROOT}/log/puma.err.log"
+-  pidfile "#{APP_ROOT}/tmp/pids/puma.pid"
+-  state_path "#{APP_ROOT}/tmp/pids/puma.state"
+-  daemonize true
+-  preload_app!
+-
+-end
++num_workers = 48
++workers "#{num_workers}"
++threads 8, 32
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index 9e48178c2d..9a546ca089 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -706,7 +706,7 @@ posting:
+     locale_default:
+       ja: true
+   max_consecutive_replies:
+-    default: 3
++    default: 999999999
+   title_prettify:
+     default: true
+     locale_default:
+@@ -811,8 +811,8 @@ posting:
+     client: true
+   max_mentions_per_post: 10
+   max_users_notified_per_group_mention: 100
+-  newuser_max_replies_per_topic: 3
+-  newuser_max_mentions_per_post: 2
++  newuser_max_replies_per_topic: 999999999
++  newuser_max_mentions_per_post: 999999999
+   title_max_word_length:
+     default: 30
+     locale_default:
+@@ -1283,7 +1283,7 @@ files:
+   allow_profile_backgrounds:
+     client: true
+     default: true
+-  automatically_download_gravatars: true
++  automatically_download_gravatars: false
+   allow_uploaded_avatars:
+     client: true
+     default: true
+@@ -1523,7 +1523,7 @@ security:
+     list_type: compact
+   slow_down_crawler_rate: 60
+   content_security_policy:
+-    default: true
++    default: false
+   content_security_policy_report_only:
+     default: false
+   content_security_policy_collect_reports:
+@@ -1628,11 +1628,11 @@ spam:
+     enum: "ReviewablePrioritySetting"
+ 
+ rate_limits:
+-  unique_posts_mins: 5
+-  rate_limit_create_topic: 15
+-  rate_limit_create_post: 5
+-  rate_limit_new_user_create_topic: 120
+-  rate_limit_new_user_create_post: 30
++  unique_posts_mins: 0
++  rate_limit_create_topic: 0
++  rate_limit_create_post: 0
++  rate_limit_new_user_create_topic: 0
++  rate_limit_new_user_create_post: 0
+   rate_limit_search_anon_global:
+     hidden: true
+     default: 150
+@@ -1642,16 +1642,16 @@ rate_limits:
+   rate_limit_search_user:
+     hidden: true
+     default: 30
+-  max_topics_per_day: 20
+-  max_personal_messages_per_day: 20
+-  max_likes_per_day: 50
+-  max_bookmarks_per_day: 20
+-  max_flags_per_day: 20
+-  max_edits_per_day: 30
+-  max_invites_per_day: 10
+-  max_topic_invitations_per_day: 30
+-  max_topics_in_first_day: 3
+-  max_replies_in_first_day: 10
++  max_topics_per_day: 999999999
++  max_personal_messages_per_day: 999999999
++  max_likes_per_day: 999999999
++  max_bookmarks_per_day: 999999999
++  max_flags_per_day: 999999999
++  max_edits_per_day: 999999999
++  max_invites_per_day: 999999999
++  max_topic_invitations_per_day: 999999999
++  max_topics_in_first_day: 999999999
++  max_replies_in_first_day: 999999999
+   tl2_additional_likes_per_day_multiplier: 1.5
+   tl3_additional_likes_per_day_multiplier: 2
+   tl4_additional_likes_per_day_multiplier: 3
+@@ -1666,16 +1666,16 @@ rate_limits:
+     client: true
+   max_logins_per_ip_per_hour:
+     min: 1
+-    default: 30
++    default: 999999999
+   max_logins_per_ip_per_minute:
+     min: 1
+-    default: 6
++    default: 999999999
+   max_post_deletions_per_minute:
+     min: 1
+-    default: 2
++    default: 999999999
+   max_post_deletions_per_day:
+     min: 1
+-    default: 10
++    default: 999999999
+   invite_link_max_redemptions_limit:
+     min: 2
+     max: 1000000
+diff --git a/lib/auth/default_current_user_provider.rb b/lib/auth/default_current_user_provider.rb
+index d2545179ff..911c5d261d 100644
+--- a/lib/auth/default_current_user_provider.rb
++++ b/lib/auth/default_current_user_provider.rb
+@@ -353,7 +353,7 @@ class Auth::DefaultCurrentUserProvider
+         end
+ 
+       if user && can_write?
+-        api_key.update_columns(last_used_at: Time.zone.now)
++        # api_key.update_columns(last_used_at: Time.zone.now)
+       end
+ 
+       user
+diff --git a/lib/post_creator.rb b/lib/post_creator.rb
+index 7c19f663ce..6ca3d77723 100644
+--- a/lib/post_creator.rb
++++ b/lib/post_creator.rb
+@@ -379,10 +379,8 @@ class PostCreator
+     else
+       # we need to ensure post_number is monotonically increasing with no gaps
+       # so we serialize creation to avoid needing rollbacks
+-      DistributedMutex.synchronize("topic_id_#{@opts[:topic_id]}") do
+-        Post.transaction do
+-          blk.call
+-        end
++      Post.transaction(isolation: :repeatable_read) do
++        blk.call
+       end
+     end
+   end
+@@ -429,7 +427,7 @@ class PostCreator
+   def track_latest_on_category
+     return unless @post && @post.errors.count == 0 && @topic && @topic.category_id
+ 
+-    Category.where(id: @topic.category_id).update_all(latest_post_id: @post.id)
++    # Category.where(id: @topic.category_id).update_all(latest_post_id: @post.id)
+     Category.where(id: @topic.category_id).update_all(latest_topic_id: @topic.id) if @post.is_first_post?
+   end
+ 

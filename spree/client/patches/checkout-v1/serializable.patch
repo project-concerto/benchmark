@@ -1,0 +1,27 @@
+diff --git a/api/app/controllers/spree/api/v1/checkouts_controller.rb b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+index 437f1396a1..194dd890ec 100644
+--- a/api/app/controllers/spree/api/v1/checkouts_controller.rb
++++ b/api/app/controllers/spree/api/v1/checkouts_controller.rb
+@@ -2,7 +2,7 @@ module Spree
+   module Api
+     module V1
+       class CheckoutsController < Spree::Api::BaseController
+-        before_action :load_order_with_lock, only: [:next, :advance, :update]
++        around_action :load_order_with_lock_correct, only: [:next, :advance, :update]
+ 
+         def next
+           authorize! :update, @order, order_token
+@@ -64,6 +64,13 @@ module Spree
+           load_order(true)
+         end
+ 
++        def load_order_with_lock_correct
++          ApplicationRecord.transaction(isolation: :serializable) do
++            load_order(false)
++            yield
++          end
++        end
++
+         def raise_insufficient_quantity
+           respond_with(@order, default_template: 'spree/api/v1/orders/insufficient_quantity', status: 422)
+         end

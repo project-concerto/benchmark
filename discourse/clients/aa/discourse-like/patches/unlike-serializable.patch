@@ -1,0 +1,15 @@
+diff --git a/app/models/post_action.rb b/app/models/post_action.rb
+index a26998aa7c..3e6b293aaa 100644
+--- a/app/models/post_action.rb
++++ b/app/models/post_action.rb
+@@ -147,7 +147,9 @@ class PostAction < ActiveRecord::Base
+     # NOTE: save is called to ensure all callbacks are called
+     # trash will not trigger callbacks, and triggering after_commit
+     # is not trivial
+-    save
++    PostAction.transaction(isolation: :serializable) do
++      save
++    end
+   end
+ 
+   def is_bookmark?

@@ -1,0 +1,20 @@
+diff --git a/lib/post_action_creator.rb b/lib/post_action_creator.rb
+index 31a03784..a0b5f980 100644
+--- a/lib/post_action_creator.rb
++++ b/lib/post_action_creator.rb
+@@ -259,9 +259,13 @@ private
+     if post_action
+       post_action.recover!
+       action_attrs.each { |attr, val| post_action.public_send("#{attr}=", val) }
+-      post_action.save
++      PostAction.transaction(isolation: :serializable) do
++        post_action.save
++      end
+     else
+-      post_action = PostAction.create(where_attrs.merge(action_attrs))
++      PostAction.transaction(isolation: :serializable) do
++        post_action = PostAction.create(where_attrs.merge(action_attrs))
++      end
+       if post_action && post_action.errors.count == 0
+         BadgeGranter.queue_badge_grant(Badge::Trigger::PostAction, post_action: post_action)
+       end

@@ -1,0 +1,14 @@
+diff --git a/src/main/java/com/broadleafcommerce/autoconfigure/DatabaseAutoConfiguration.java b/src/main/java/com/broadleafcommerce/autoconfigure/DatabaseAutoConfiguration.java
+index 94b9328..aa2c53b 100644
+--- a/src/main/java/com/broadleafcommerce/autoconfigure/DatabaseAutoConfiguration.java
++++ b/src/main/java/com/broadleafcommerce/autoconfigure/DatabaseAutoConfiguration.java
+@@ -102,6 +102,9 @@ public class DatabaseAutoConfiguration {
+             ds.setValidationQuery(validationQuery);
+         }
+ 
++        ds.setMaxActive(900);
++        ds.setMaxIdle(900);
++
+         return ds;
+     }
+ 
