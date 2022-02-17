@@ -22,11 +22,11 @@ public class BLCTxn {
 
     public static boolean doTxn(BaseEmulator emulator) {
         try{
-            // addCart(emulator.getOkHttpClient(), emulator.getId());
+            // addCart(emulator.getOkHttpClient(), emulator.geteId() + 609);
             // Current branch is used to simulate high contention
             // Use the above line of code to simulate no contention 
             addCart(emulator.getOkHttpClient(), 666);
-            checkout(emulator.getOkHttpClient(), emulator.getId() + "@qq.com");
+            checkout(emulator.getOkHttpClient(), emulator.geteId() + "@qq.com");
         } catch (IOException | RequestFailException e) {
             if(debugEnable){
                 logger.error(e.toString());
